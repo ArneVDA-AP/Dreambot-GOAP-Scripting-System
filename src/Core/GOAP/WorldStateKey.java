@@ -19,6 +19,7 @@ public enum WorldStateKey {
     S0_SETTINGS_DONE,       // Boolean
     S0_DOOR_OPEN,           // Boolean
     TUT_S0_READY_FOR_DOOR,  // Boolean
+    TUT_ISLAND_COMPLETED,   // Boolean
 
     // Section 1: Survival Expert
     S1_HAS_AXE,             // Boolean
