@@ -1,0 +1,9 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="GOAP:jar">
+    <output-path>$USER_HOME$/DreamBot/Scripts</output-path>
+    <root id="archive" name="GOAP.jar">
+      <element id="module-output" name="GOAP" />
+      <element id="extracted-dir" path="$USER_HOME$/DreamBot/BotData/gamepack.jar" path-in-jar="/" />
+    </root>
+  </artifact>
+</component>
