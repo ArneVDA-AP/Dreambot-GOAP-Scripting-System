@@ -3,6 +3,7 @@ package Main; // Or your main package
 import Core.GOAP.WorldState;
 import Core.GOAP.WorldStateKey;
 import Core.GameIntegration.DreamBotWorldObserver; // Import the observer
+import org.dreambot.api.methods.world.World;
 import org.dreambot.api.script.AbstractScript;
 import org.dreambot.api.script.ScriptManifest;
 import org.dreambot.api.script.Category;
@@ -56,8 +57,10 @@ public class TutorialIslandGOAPScript extends AbstractScript {
         boolean stageChanged = !previousStageName.equals(currentStage);
         boolean areaChanged = !previousAreaName.equals(currentArea);
         boolean dialogueChanged = previousDialogueState != isDialogueOpen;
+        boolean isWalking = worldState.getBoolean(WorldStateKey.LOC_IS_WALKING);
+        boolean isAnimating = worldState.getBoolean(WorldStateKey.INTERACT_IS_ANIMATING);
 
-        if (stageChanged || areaChanged || dialogueChanged) {
+        if (stageChanged || areaChanged || dialogueChanged || isWalking || isAnimating) {
             Logger.log("===== State Change Detected =====");
             Logger.log(String.format("Stage: %s (ID: %d) | Area: %s | Dialogue: %s",
                     currentStage,

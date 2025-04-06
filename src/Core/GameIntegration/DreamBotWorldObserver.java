@@ -11,7 +11,7 @@ import org.dreambot.api.methods.interactive.GameObjects;
 import org.dreambot.api.methods.interactive.Players;
 import org.dreambot.api.methods.map.Area;
 import org.dreambot.api.methods.map.Tile;
-import org.dreambot.api.methods.prayer.Prayer; // Import Prayer enum
+import org.dreambot.api.methods.prayer.Prayer;
 import org.dreambot.api.methods.prayer.Prayers;
 import org.dreambot.api.methods.settings.PlayerSettings;
 import org.dreambot.api.methods.skills.Skill;
@@ -22,28 +22,59 @@ import org.dreambot.api.methods.widget.Widgets;
 import org.dreambot.api.script.AbstractScript;
 import org.dreambot.api.wrappers.interactive.GameObject;
 import org.dreambot.api.wrappers.items.Item;
+import org.dreambot.api.wrappers.widgets.WidgetChild; // Keep for potential future use
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.TreeMap; // Using TreeMap
+import java.util.TreeMap;
 
 /**
  * Responsible for observing the live OSRS game state via the DreamBot API
  * and updating the GOAP agent's WorldState accordingly.
- * Uses data derived from TUT_TRANSCRIPT.json and corrected VarPlayer mapping for Tutorial Island specifics.
+ * Uses data derived from research for Tutorial Island specifics.
  */
 public class DreamBotWorldObserver {
 
     private final AbstractScript script;
     private static final int TUTORIAL_ISLAND_VARP = 281;
 
-    // --- Define Areas based on JSON ---
+    // --- Object IDs (from research - VERIFY IN GAME) ---
+    private static final int STARTING_DOOR_ID = 2; // Research suggests ID 2
+    private static final int SURVIVAL_FIRE_ID = -1; // Research suggests ID 70, but name/action check might be safer
+    private static final int CHEF_EXIT_DOOR_ID = 160; // Research suggests ID 160
+    private static final int MINE_EXIT_GATE_ID = 305; // Research suggests ID 305
+    private static final int RAT_PEN_GATE_ID = 370; // Research suggests ID 370
+    private static final int FIN_DOOR_IN_ID = 450; // Research suggests ID 450
+    private static final int FIN_DOOR_OUT_ID = 470; // Research suggests ID 470
+    private static final int CHURCH_EXIT_DOOR_ID = 530; // Research suggests ID 530
+
+    // --- Widget IDs (from research - VERIFY IN GAME) ---
+    private static final int WIDGET_ID_EQUIP_STATS = 84;
+    private static final int WIDGET_ID_POLL_BOOTH = 345;
+    private static final int WIDGET_ID_ACC_MANAGEMENT = 109;
+    // private static final int WIDGET_ID_NPC_CHAT_BOX = 162; // Keep for reference
+    // private static final int WIDGET_CHILD_ID_CONTINUE = 58; // Keep for reference
+
+    // --- Areas (Loaded from your verified definitions - ENSURE THESE ARE ACCURATE) ---
     private static final Map<String, Area> TUTORIAL_AREAS = loadTutorialAreas();
 
+    // --- VarPlayer Mapping (Using TreeMap and specific values - VALIDATE TRIGGER POINTS) ---
+    private static final TreeMap<Integer, String> VARP_TO_STAGE_NAME = createVarpMap();
+
+
+    // --- Constructor ---
+    public DreamBotWorldObserver(AbstractScript script) {
+        this.script = script;
+        if (this.script == null) {
+            System.err.println("CRITICAL: DreamBotWorldObserver initialized without a valid script reference!");
+        }
+    }
+
+    // --- Area Definitions ---
     private static Map<String, Area> loadTutorialAreas() {
         Map<String, Area> areas = new HashMap<>();
-        // Load ALL areas from JSON data - VERIFY PLACEHOLDERS
+        // Load ALL areas - VERIFY PLACEHOLDERS
         areas.put("Guide_Start_Area", new Area(3094, 3107, 3102, 3112));
         areas.put("Survival_Fishing_Area", new Area(3100, 3094, 3106, 3099));
         areas.put("Survival_Cooking_Area", new Area(3086, 3092, 3092, 3097));
@@ -56,17 +87,14 @@ public class DreamBotWorldObserver {
         areas.put("Prayer_Area", new Area(3121, 3117, 3126, 3120)); // Placeholder - VERIFY
         areas.put("Magic_Area", new Area(3138, 3084, 3145, 3090)); // Placeholder - VERIFY
         areas.put("Mainland_Spawn", new Area(3221, 3218, 3223, 3220));
-        // Add other specific areas from JSON if needed (e.g., Rat Pen, specific doors)
-        areas.put("Financial_Advisor_Area", new Area(3124, 3127, 3128, 3130)); // Added based on JSON ID 460
-
+        areas.put("Financial_Advisor_Area", new Area(3124, 3127, 3128, 3130));
         return Collections.unmodifiableMap(areas);
     }
 
-    // --- Define Mapping from EXACT VarPlayer Value to Stage Name ---
-    private static final TreeMap<Integer, String> VARP_TO_STAGE_NAME = createVarpMap();
-
+    // --- VarPlayer Mapping ---
     private static TreeMap<Integer, String> createVarpMap() {
         TreeMap<Integer, String> map = new TreeMap<>();
+        // Populate with the detailed map from previous step (0, 1, 2, 3, 7, 10...)
         map.put(0, "S0_Start_CharCreation");
         map.put(1, "S0_Start_TalkToGuide");
         map.put(2, "S0_Start_TalkToGuide_PostName");
@@ -135,22 +163,13 @@ public class DreamBotWorldObserver {
         return map;
     }
 
-    public DreamBotWorldObserver(AbstractScript script) {
-        this.script = script;
-        if (this.script == null) {
-            System.err.println("CRITICAL: DreamBotWorldObserver initialized without a valid script reference!");
-        }
-    }
-
+    // --- Main Update Method ---
     public void updateWorldState(WorldState worldState) {
-        if (script == null || worldState == null) {
-            System.err.println("OBSERVER: Cannot update WorldState, script reference or worldState is null.");
-            return;
-        }
+        if (script == null || worldState == null) return;
 
-        // --- Determine Location FIRST ---
+        // Determine Location FIRST
         Tile playerTile = Players.getLocal().getTile();
-        String currentAreaName = "Unknown"; // Default
+        String currentAreaName = "Unknown";
         for (Map.Entry<String, Area> entry : TUTORIAL_AREAS.entrySet()) {
             if (entry.getValue().contains(playerTile)) {
                 currentAreaName = entry.getKey();
@@ -160,8 +179,7 @@ public class DreamBotWorldObserver {
         worldState.setString(WorldStateKey.LOC_CURRENT_AREA_NAME, currentAreaName);
         worldState.setBoolean(WorldStateKey.LOC_IS_WALKING, Players.getLocal().isMoving());
 
-
-        // --- Determine Tutorial Progress SECOND ---
+        // Determine Tutorial Progress SECOND
         int tutorialProgressVar = PlayerSettings.getConfig(TUTORIAL_ISLAND_VARP);
         worldState.setInteger(WorldStateKey.TUT_STAGE_ID, tutorialProgressVar);
         Map.Entry<Integer, String> stageEntry = VARP_TO_STAGE_NAME.floorEntry(tutorialProgressVar);
@@ -169,15 +187,13 @@ public class DreamBotWorldObserver {
         worldState.setString(WorldStateKey.TUT_STAGE_NAME, stageName);
         worldState.setBoolean(WorldStateKey.TUT_ISLAND_COMPLETED, tutorialProgressVar == 1000);
 
-
-        // --- Update Object States THIRD ---
+        // Update Object States THIRD
         updateObjectStates(worldState, stageName, currentAreaName);
 
-
-        // --- Update Other States ---
+        // Update Other States
 
         // Interaction
-        boolean npcDialogueActive = Dialogues.isProcessing();
+        boolean npcDialogueActive = Dialogues.inDialogue() && Dialogues.canContinue();
         worldState.setBoolean(WorldStateKey.INTERACT_IS_DIALOGUE_OPEN, npcDialogueActive);
         if (!npcDialogueActive) {
             worldState.setString(WorldStateKey.INTERACT_NPC_NAME, null);
@@ -189,15 +205,15 @@ public class DreamBotWorldObserver {
         worldState.setBoolean(WorldStateKey.UI_SKILLS_TAB_OPEN, Tabs.isOpen(Tab.SKILLS));
         worldState.setBoolean(WorldStateKey.UI_MUSIC_TAB_OPEN, Tabs.isOpen(Tab.MUSIC));
         worldState.setBoolean(WorldStateKey.UI_EQUIPMENT_TAB_OPEN, Tabs.isOpen(Tab.EQUIPMENT));
-        // UI_EQUIPMENT_STATS_OPEN - Needs specific widget check
+        worldState.setBoolean(WorldStateKey.UI_EQUIPMENT_STATS_OPEN, WIDGET_ID_EQUIP_STATS != -1 && Widgets.getWidget(WIDGET_ID_EQUIP_STATS) != null && Widgets.getWidget(WIDGET_ID_EQUIP_STATS).isVisible());
         worldState.setBoolean(WorldStateKey.UI_COMBAT_OPTIONS_OPEN, Tabs.isOpen(Tab.COMBAT));
         worldState.setBoolean(WorldStateKey.UI_QUEST_TAB_OPEN, Tabs.isOpen(Tab.QUEST));
         worldState.setBoolean(WorldStateKey.UI_PRAYER_TAB_OPEN, Tabs.isOpen(Tab.PRAYER));
         worldState.setBoolean(WorldStateKey.UI_FRIENDS_TAB_OPEN, Tabs.isOpen(Tab.FRIENDS));
-        // Ignore tab check removed
         worldState.setBoolean(WorldStateKey.UI_MAGIC_SPELLBOOK_OPEN, Tabs.isOpen(Tab.MAGIC));
         worldState.setBoolean(WorldStateKey.UI_BANK_OPEN, Bank.isOpen());
-        // UI_POLL_BOOTH_OPEN - Needs specific widget check
+        worldState.setBoolean(WorldStateKey.UI_POLL_BOOTH_OPEN, WIDGET_ID_POLL_BOOTH != -1 && Widgets.getWidget(WIDGET_ID_POLL_BOOTH) != null && Widgets.getWidget(WIDGET_ID_POLL_BOOTH).isVisible());
+        // TODO: Add check for Account Management (Widget 109) if needed
 
         // Inventory
         worldState.setInteger(WorldStateKey.INV_SPACE, Inventory.getEmptySlots());
@@ -259,92 +275,49 @@ public class DreamBotWorldObserver {
         // ...
     }
 
-    /**
-     * Updates world state keys related to specific game objects,
-     * often checking only when relevant to the current area or stage name.
-     * Uses area names defined in the TUTORIAL_AREAS map.
-     *
-     * @param worldState The WorldState object to update.
-     * @param currentStageName The current stage name (e.g., "S1_Survival_MakeFire") from VarPlayer mapping.
-     * @param currentAreaName The current area name (e.g., "Survival_Cooking_Area") based on player position.
-     */
+    // --- Object State Helper ---
     private void updateObjectStates(WorldState worldState, String currentStageName, String currentAreaName) {
-        // --- S0: Starting Door ---
-        boolean s0DoorCheckRelevant = currentAreaName.equals("Guide_Start_Area");
-        if (s0DoorCheckRelevant) {
-            GameObject startDoor = GameObjects.closest(door -> door != null && door.getName().equals("Door") && TUTORIAL_AREAS.get("Guide_Start_Area").contains(door.getTile()));
-            worldState.setBoolean(WorldStateKey.S0_DOOR_OPEN, startDoor != null && !startDoor.hasAction("Open"));
-        } else {
-            int currentStageId = worldState.getInteger(WorldStateKey.TUT_STAGE_ID);
-            worldState.setBoolean(WorldStateKey.S0_DOOR_OPEN, currentStageId >= 10);
-        }
+        // TODO: Replace null Tiles with verified coordinates for each object
+        updateSingleObjectState(worldState, WorldStateKey.S0_DOOR_OPEN, STARTING_DOOR_ID, "Door", null, currentAreaName.equals("Guide_Start_Area"), 10);
 
-        // --- S1: Survival Fire ---
         boolean fireCheckRelevant = currentAreaName.equals("Survival_Cooking_Area");
         if (fireCheckRelevant) {
-            GameObject litFire = GameObjects.closest(fire -> fire != null && fire.getName().equals("Fire") && TUTORIAL_AREAS.get("Survival_Cooking_Area").contains(fire.getTile()));
+            GameObject litFire = GameObjects.closest(fire -> fire != null && fire.getName().equals("Fire") && fire.hasAction("Cook") && TUTORIAL_AREAS.get("Survival_Cooking_Area").contains(fire.getTile()));
             worldState.setBoolean(WorldStateKey.S1_IS_FIRE_LIT, litFire != null);
         } else {
             worldState.setBoolean(WorldStateKey.S1_IS_FIRE_LIT, false);
         }
 
-        // --- S2: Chef House Exit Door ---
-        boolean s2DoorCheckRelevant = currentAreaName.equals("Cooking_Range_Area");
-        if (s2DoorCheckRelevant) {
-            GameObject chefExitDoor = GameObjects.closest(door -> door != null && door.getName().equals("Door") && door.getTile().equals(new Tile(3074, 3081, 0))); // VERIFY TILE
-            worldState.setBoolean(WorldStateKey.S2_CHEF_DOOR_EXIT_OPEN, chefExitDoor != null && !chefExitDoor.hasAction("Open"));
+        updateSingleObjectState(worldState, WorldStateKey.S2_CHEF_DOOR_EXIT_OPEN, CHEF_EXIT_DOOR_ID, "Door", null, currentAreaName.equals("Cooking_Range_Area"), 170);
+        updateSingleObjectState(worldState, WorldStateKey.S3_MINE_GATE_OPEN, MINE_EXIT_GATE_ID, "Gate", null, currentAreaName.equals("Mining_Smithing_Area"), 360);
+        updateSingleObjectState(worldState, WorldStateKey.S4_RAT_GATE_OPEN, RAT_PEN_GATE_ID, "Gate", null, currentAreaName.equals("Combat_Area"), 440);
+        updateSingleObjectState(worldState, WorldStateKey.S5_FINANCIAL_DOOR_IN_OPEN, FIN_DOOR_IN_ID, "Door", null, currentAreaName.equals("Bank_Area"), 460);
+        updateSingleObjectState(worldState, WorldStateKey.S5_FINANCIAL_DOOR_OUT_OPEN, FIN_DOOR_OUT_ID, "Door", null, currentAreaName.equals("Financial_Advisor_Area"), 540);
+        updateSingleObjectState(worldState, WorldStateKey.S6_CHURCH_DOOR_OUT_OPEN, CHURCH_EXIT_DOOR_ID, "Door", null, currentAreaName.equals("Prayer_Area"), 610);
+    }
+
+    // --- Object State Helper ---
+    private void updateSingleObjectState(WorldState worldState, WorldStateKey key, int objectId, String objectName, Tile objectTile, boolean checkRelevant, int openStageIdThreshold) {
+        if (checkRelevant) {
+            GameObject obj = GameObjects.closest(o -> o != null
+                    && (o.getID() == objectId) // Prioritize ID if valid (>0)
+                    && (objectTile == null || o.getTile().equals(objectTile))); // Use Tile if provided
+
+            if (obj == null && objectId <= 0) { // Fallback to name if ID invalid or not found
+                obj = GameObjects.closest(o -> o != null
+                        && (o.getName().equals(objectName))
+                        && (objectTile == null || o.getTile().equals(objectTile)));
+            }
+            // State is OPEN if the object exists and does NOT have the "Open" action
+            worldState.setBoolean(key, obj != null && !obj.hasAction("Open"));
         } else {
             int currentStageId = worldState.getInteger(WorldStateKey.TUT_STAGE_ID);
-            worldState.setBoolean(WorldStateKey.S2_CHEF_DOOR_EXIT_OPEN, currentStageId >= 170);
-        }
-
-        // --- S3: Mine Exit Gate ---
-        boolean s3GateCheckRelevant = currentAreaName.equals("Mining_Smithing_Area");
-        if (s3GateCheckRelevant) {
-            GameObject mineGate = GameObjects.closest(gate -> gate != null && gate.getName().equals("Gate") && gate.getTile().equals(new Tile(3092, 9503, 0))); // VERIFY TILE
-            worldState.setBoolean(WorldStateKey.S3_MINE_GATE_OPEN, mineGate != null && !mineGate.hasAction("Open"));
-        } else {
-            int currentStageId = worldState.getInteger(WorldStateKey.TUT_STAGE_ID);
-            worldState.setBoolean(WorldStateKey.S3_MINE_GATE_OPEN, currentStageId >= 360);
-        }
-
-        // --- S4: Rat Pen Gate ---
-        boolean s4GateCheckRelevant = currentAreaName.equals("Combat_Area");
-        if (s4GateCheckRelevant) {
-            GameObject ratGate = GameObjects.closest(gate -> gate != null && gate.getName().equals("Gate") && gate.getTile().equals(new Tile(3097, 9509, 0))); // VERIFY TILE
-            worldState.setBoolean(WorldStateKey.S4_RAT_GATE_OPEN, ratGate != null && !ratGate.hasAction("Open"));
-        } else {
-            worldState.setBoolean(WorldStateKey.S4_RAT_GATE_OPEN, false);
-        }
-
-        // --- S5: Financial Advisor Doors ---
-        boolean s5AreaCheck = currentAreaName.equals("Bank_Area") || currentAreaName.equals("Financial_Advisor_Area");
-        if (s5AreaCheck) {
-            GameObject finDoorIn = GameObjects.closest(d -> d != null && d.getName().equals("Door") && d.getTile().equals(new Tile(3125, 3126, 0))); // VERIFY TILE
-            worldState.setBoolean(WorldStateKey.S5_FINANCIAL_DOOR_IN_OPEN, finDoorIn != null && !finDoorIn.hasAction("Open"));
-            GameObject finDoorOut = GameObjects.closest(d -> d != null && d.getName().equals("Door") && d.getTile().equals(new Tile(3128, 3125, 0))); // VERIFY TILE
-            worldState.setBoolean(WorldStateKey.S5_FINANCIAL_DOOR_OUT_OPEN, finDoorOut != null && !finDoorOut.hasAction("Open"));
-        } else {
-            int currentStageId = worldState.getInteger(WorldStateKey.TUT_STAGE_ID);
-            worldState.setBoolean(WorldStateKey.S5_FINANCIAL_DOOR_IN_OPEN, currentStageId >= 460);
-            worldState.setBoolean(WorldStateKey.S5_FINANCIAL_DOOR_OUT_OPEN, currentStageId >= 540);
-        }
-
-        // --- S6: Church Exit Door ---
-        boolean s6DoorCheckRelevant = currentAreaName.equals("Prayer_Area");
-        if (s6DoorCheckRelevant) {
-            GameObject churchDoorOut = GameObjects.closest(door -> door != null && door.getName().equals("Door") && door.getTile().equals(new Tile(3121, 3116, 0))); // VERIFY TILE
-            worldState.setBoolean(WorldStateKey.S6_CHURCH_DOOR_OUT_OPEN, churchDoorOut != null && !churchDoorOut.hasAction("Open"));
-        } else {
-            int currentStageId = worldState.getInteger(WorldStateKey.TUT_STAGE_ID);
-            worldState.setBoolean(WorldStateKey.S6_CHURCH_DOOR_OUT_OPEN, currentStageId >= 610);
+            worldState.setBoolean(key, currentStageId >= openStageIdThreshold); // Fallback based on progress
         }
     }
 
-    // Minimal EquipmentSlot enum for the helper method
+    // --- Equipment Helper ---
     private enum EquipmentSlot { WEAPON(3); private final int slot; EquipmentSlot(int s) {this.slot=s;} public int getSlot(){return slot;} }
-
-    // Helper method to check equipment
     private boolean isEquipped(EquipmentSlot slot, String itemName) {
         Item item = Equipment.getItemInSlot(slot.getSlot());
         return item != null && item.getName().equals(itemName);
