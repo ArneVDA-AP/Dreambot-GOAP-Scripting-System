@@ -40,7 +40,7 @@ public class DreamBotWorldObserver {
     private static final int TUTORIAL_ISLAND_VARP = 281;
 
     // --- Object IDs (from research - VERIFY IN GAME) ---
-    private static final int STARTING_DOOR_ID = 2; // Research suggests ID 2
+    private static final int STARTING_DOOR_ID = 2;   // Research suggests ID 2
     private static final int SURVIVAL_FIRE_ID = -1; // Research suggests ID 70, but name/action check might be safer
     private static final int CHEF_EXIT_DOOR_ID = 160; // Research suggests ID 160
     private static final int MINE_EXIT_GATE_ID = 305; // Research suggests ID 305
@@ -57,7 +57,7 @@ public class DreamBotWorldObserver {
     // private static final int WIDGET_CHILD_ID_CONTINUE = 58; // Keep for reference
 
     // --- Areas (Loaded from your verified definitions - ENSURE THESE ARE ACCURATE) ---
-    private static final Map<String, Area> TUTORIAL_AREAS = loadTutorialAreas();
+    public static final Map<String, Area> TUTORIAL_AREAS = loadTutorialAreas();
 
     // --- VarPlayer Mapping (Using TreeMap and specific values - VALIDATE TRIGGER POINTS) ---
     private static final TreeMap<Integer, String> VARP_TO_STAGE_NAME = createVarpMap();

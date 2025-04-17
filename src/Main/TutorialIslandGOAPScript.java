@@ -1,8 +1,13 @@
 package Main; // Or your main package
 
+import Core.Actions.*;
 import Core.GOAP.WorldState;
 import Core.GOAP.WorldStateKey;
 import Core.GameIntegration.DreamBotWorldObserver; // Import the observer
+import org.dreambot.api.methods.magic.Normal;
+import org.dreambot.api.methods.map.Area;
+import org.dreambot.api.methods.map.Tile;
+import org.dreambot.api.methods.tabs.Tab;
 import org.dreambot.api.methods.world.World;
 import org.dreambot.api.script.AbstractScript;
 import org.dreambot.api.script.ScriptManifest;
@@ -16,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue; // Import Queue
 import java.util.LinkedList; // Import LinkedList
+
+import static Core.GameIntegration.DreamBotWorldObserver.TUTORIAL_AREAS;
 
 @ScriptManifest(name = "GOAP Tutorial Island",
         description = "Automates Tutorial Island using GOAP", // Updated description
@@ -123,18 +130,184 @@ public class TutorialIslandGOAPScript extends AbstractScript {
         return 600; // Standard loop delay
     }
 
-    /** Loads all defined Action instances */
+    // Inside loadAvailableActions() in TutorialIslandGOAPScript.java
     private List<Action> loadAvailableActions() {
         List<Action> actions = new ArrayList<>();
-        // TODO: Instantiate ALL specific Action classes needed for Tutorial Island here
-        // Example:
-        // actions.add(new ActionTalkToNPC("Gielinor Guide"));
-        // actions.add(new ActionOpenDoor(DOOR_ID, DOOR_TILE));
-        // actions.add(new ActionClickWidget(SETTINGS_WIDGET_ID));
-        // actions.add(new ActionWalkToArea(TUTORIAL_AREAS.get("Survival_Fishing_Area")));
-        // actions.add(new ActionCutTree());
-        // ... etc ...
-        Logger.log("Loaded " + actions.size() + " available actions."); // Log count once implemented
+        Logger.log("Loading available actions..."); // Add log
+
+        // --- Section 0 Actions ---
+        Area guideArea = TUTORIAL_AREAS.get("Guide_Start_Area");
+        Tile startingDoorTile = new Tile(3097, 3107, 0); // VERIFY THIS TILE
+        actions.add(new ActionTalkToNPC("Gielinor Guide", "S0_Start_OpenSettings", guideArea));
+        actions.add(new ActionContinueDialogue("Gielinor Guide"));
+        if (startingDoorTile != null) {
+            Map<WorldStateKey, Object> openDoorEffects = new HashMap<>();
+            openDoorEffects.put(WorldStateKey.S0_DOOR_OPEN, true);
+            openDoorEffects.put(WorldStateKey.TUT_STAGE_NAME, "S1_Survival_TalkToExpert"); // Anticipate next stage
+            actions.add(new ActionOpenDoor("Door", startingDoorTile, WorldStateKey.S0_DOOR_OPEN, "S1_Survival_TalkToExpert")); // Use ActionOpenDoor specifically
+        } else { Logger.log("ERROR: Starting Door Tile not set!"); }
+
+        // --- Section 1 Actions ---
+        Area survivalArea = TUTORIAL_AREAS.get("Survival_Fishing_Area"); // General survival area
+        Area cookingArea = TUTORIAL_AREAS.get("Survival_Cooking_Area"); // Area with fire
+        Area woodcuttingArea = null; // Define specific woodcutting area if needed
+        Tile fireTile = new Tile(3098, 3102, 0); // Example fire tile - VERIFY
+        int woodcuttingAnim = 879; // VERIFY
+        int firemakingAnim = 733; // VERIFY
+        int fishingAnim = 621; // VERIFY
+        int cookingAnim = 897; // VERIFY
+
+        actions.add(new ActionWalkToTile(survivalArea.getCenter(), 3, "Survival_Fishing_Area")); // Walk to general area
+        actions.add(new ActionTalkToNPC("Survival Expert", "S1_Survival_OpenInventory", survivalArea));
+        actions.add(new ActionContinueDialogue("Survival Expert"));
+        actions.add(new ActionOpenTab(Tab.INVENTORY, WorldStateKey.UI_INVENTORY_OPEN)); // For ID 30
+        actions.add(new ActionOpenTab(Tab.SKILLS, WorldStateKey.UI_SKILLS_TAB_OPEN)); // For ID 50
+        actions.add(new ActionCutTree(woodcuttingArea)); // Add area if defined
+        actions.add(new ActionMakeFire());
+        actions.add(new ActionFishShrimp());
+        actions.add(new ActionCookShrimp()); // Uses fire on player's tile
+
+        // --- Section 2 Actions ---
+        Area chefArea = TUTORIAL_AREAS.get("Cooking_Range_Area"); // VERIFY AREA
+        Tile chefDoorExitTile = new Tile(3074, 3081, 0); // VERIFY TILE
+        int rangeId = -1; // Find Range ID if needed, otherwise use name
+        actions.add(new ActionWalkToTile(chefArea.getCenter(), 2, "Cooking_Range_Area"));
+        actions.add(new ActionTalkToNPC("Master Chef", "S2_Cooking_MakeDough", chefArea));
+        actions.add(new ActionContinueDialogue("Master Chef"));
+        actions.add(new ActionUseItemOnItem("Bucket of water", WorldStateKey.S2_HAS_BUCKET_OF_WATER, "Pot of flour", WorldStateKey.S2_HAS_FLOUR, "Bread dough", WorldStateKey.S2_HAS_DOUGH));
+        Map<WorldStateKey, Object> bakeEffects = new HashMap<>();
+        bakeEffects.put(WorldStateKey.S2_HAS_DOUGH, false);
+        bakeEffects.put(WorldStateKey.S2_HAS_BREAD, true);
+        actions.add(new ActionUseItemOnObject("Bread dough", WorldStateKey.S2_HAS_DOUGH, "Range", "Cook", "Bread", WorldStateKey.S2_HAS_BREAD, cookingAnim)); // Use Name "Range"
+        actions.add(new ActionOpenTab(Tab.MUSIC, WorldStateKey.UI_MUSIC_TAB_OPEN)); // For ID 145
+        Map<WorldStateKey, Object> openChefDoorEffects = new HashMap<>();
+        openChefDoorEffects.put(WorldStateKey.S2_CHEF_DOOR_EXIT_OPEN, true);
+        openChefDoorEffects.put(WorldStateKey.TUT_STAGE_NAME, "S3_Quest_EnterQuestHouse");
+        actions.add(new ActionClickObject("Door", chefDoorExitTile, "Open", openChefDoorEffects, -1)); // Open chef exit door
+
+        // --- Section 3 Actions ---
+        Area questGuideArea = TUTORIAL_AREAS.get("Quest_Guide_Area");
+        Area miningArea = TUTORIAL_AREAS.get("Mining_Area");
+        Area smithingArea = TUTORIAL_AREAS.get("Mining_Smithing_Area");
+        Tile ladderTile = new Tile(3088, 9506, 0); // VERIFY LADDER TILE
+        Tile furnaceTile = new Tile(3081, 9498, 0); // VERIFY FURNACE TILE
+        Tile anvilTile = new Tile(3081, 9499, 0); // VERIFY ANVIL TILE
+        int furnaceId = -1; // Find Furnace ID
+        int anvilId = 2097; // Common Anvil ID - VERIFY
+        int miningAnim = 625; // VERIFY
+        int smithingAnim = 898; // Common smithing anim - VERIFY
+
+        actions.add(new ActionWalkToTile(questGuideArea.getCenter(), 2, "Quest_Guide_Area"));
+        actions.add(new ActionTalkToNPC("Quest Guide", "S3_Quest_OpenQuestTab", questGuideArea));
+        actions.add(new ActionContinueDialogue("Quest Guide"));
+        actions.add(new ActionOpenTab(Tab.QUEST, WorldStateKey.UI_QUEST_TAB_OPEN)); // For ID 230
+        Map<WorldStateKey, Object> climbLadderEffects = new HashMap<>();
+        climbLadderEffects.put(WorldStateKey.LOC_CURRENT_AREA_NAME, "Mining_Area"); // Now in mine
+        climbLadderEffects.put(WorldStateKey.TUT_STAGE_NAME, "S3_Mining_TalkToInstructor");
+        actions.add(new ActionClickObject("Ladder", ladderTile, "Climb-down", climbLadderEffects, -1)); // Climb ladder
+        actions.add(new ActionWalkToTile(miningArea.getCenter(), 3, "Mining_Area")); // Walk within mine
+        actions.add(new ActionTalkToNPC("Mining Instructor", "S3_Mining_MineTin", miningArea)); // Includes prospecting dialogue implicitly
+        actions.add(new ActionContinueDialogue("Mining Instructor"));
+        actions.add(new ActionMineOre("Tin rocks", "Tin ore", WorldStateKey.S3_HAS_TIN_ORE, WorldStateKey.S3_HAS_PICKAXE, miningArea));
+        actions.add(new ActionMineOre("Copper rocks", "Copper ore", WorldStateKey.S3_HAS_COPPER_ORE, WorldStateKey.S3_HAS_PICKAXE, miningArea));
+        Map<WorldStateKey, Object> smeltEffects = new HashMap<>();
+        smeltEffects.put(WorldStateKey.S3_HAS_TIN_ORE, false);
+        smeltEffects.put(WorldStateKey.S3_HAS_COPPER_ORE, false);
+        smeltEffects.put(WorldStateKey.S3_HAS_BRONZE_BAR, true);
+        // Use ore on furnace - need to decide which ore triggers the action, or make two actions
+        actions.add(new ActionUseItemOnObject("Tin ore", WorldStateKey.S3_HAS_TIN_ORE, "Furnace", "Use", "Bronze bar", WorldStateKey.S3_HAS_BRONZE_BAR, -1)); // Use Tin on Furnace
+        // OR actions.add(new ActionUseItemOnObject("Copper ore", WorldStateKey.S3_HAS_COPPER_ORE, "Furnace", "Use", "Bronze bar", WorldStateKey.S3_HAS_BRONZE_BAR, -1)); // Use Copper on Furnace
+        Map<WorldStateKey, Object> clickAnvilEffects = new HashMap<>(); // Clicking anvil might just open interface
+        // clickAnvilEffects.put(WorldStateKey.UI_SMITHING_INTERFACE_OPEN, true); // Need this key/check
+        // Action for Smithing Dagger (S3)
+        actions.add(new ActionSmithItem(
+                "Bronze dagger", // Item to make
+                "Bronze bar",    // Bar needed
+                WorldStateKey.S3_HAS_BRONZE_BAR,
+                WorldStateKey.S3_HAS_HAMMER,
+                WorldStateKey.S3_HAS_DAGGER,
+                1 // Make 1 for tutorial
+        ));
+
+        // Action for clicking Equip Stats button (S4) - ID path needs verification!
+        int[] equipStatsButtonPath = {15, 10}; // EXAMPLE - FIND ACTUAL PATH
+        Map<WorldStateKey, Object> viewStatsEffects = new HashMap<>();
+        viewStatsEffects.put(WorldStateKey.UI_EQUIPMENT_STATS_OPEN, true);
+        actions.add(new ActionClickWidget(equipStatsButtonPath, "ViewEquipmentStats", viewStatsEffects));
+
+        // Action for clicking Dagger in Smithing Interface (S3) - ID path needs verification!
+        int[] smithDaggerButtonPath = {15, 10}; // EXAMPLE - FIND ACTUAL PATH
+        // Effects for clicking smithing item might be just starting animation
+        Map<WorldStateKey, Object> clickSmithDaggerEffects = new HashMap<>();
+        // clickSmithDaggerEffects.put(WorldStateKey.INTERACT_IS_ANIMATING, true); // Maybe? Or handled by UseItemOnObject
+        actions.add(new ActionClickWidget(smithDaggerButtonPath, "ClickSmithDagger", clickSmithDaggerEffects));
+
+        // Action for Equipping Dagger (S4)
+        actions.add(new ActionEquipItem("Bronze dagger", WorldStateKey.S3_HAS_DAGGER, WorldStateKey.S4_DAGGER_EQUIPPED));
+
+        // Action for Equipping Sword (S4) - Need key S4_HAS_SWORD
+        // actions.add(new ActionEquipItem("Bronze sword", WorldStateKey.S4_HAS_SWORD, WorldStateKey.S4_SWORD_EQUIPPED)); // Need S4_SWORD_EQUIPPED key
+
+        // Action for Equipping Shield (S4) - Need key S4_HAS_SHIELD
+        // actions.add(new ActionEquipItem("Wooden shield", WorldStateKey.S4_HAS_SHIELD, WorldStateKey.S4_SHIELD_EQUIPPED)); // Need S4_SHIELD_EQUIPPED key
+
+        // Action for Equipping Bow (S4)
+        actions.add(new ActionEquipItem("Shortbow", WorldStateKey.S4_HAS_BOW, WorldStateKey.S4_BOW_EQUIPPED)); // Need S4_BOW_EQUIPPED key
+
+        // Action for Equipping Arrows (S4) - Arrows are stackable, might need different handling or key
+        actions.add(new ActionEquipItem("Bronze arrow", WorldStateKey.S4_HAS_ARROWS, WorldStateKey.S4_ARROWS_EQUIPPED)); // Need S4_ARROWS_EQUIPPED key
+
+
+        // Action for attacking Rat with Melee (S4)
+        Area combatArea = TUTORIAL_AREAS.get("Combat_Area"); // Use correct name
+        Map<WorldStateKey, Object> killRatMeleeEffects = new HashMap<>();
+        killRatMeleeEffects.put(WorldStateKey.S4_KILLED_RAT_MELEE, true); // Set completion flag
+        killRatMeleeEffects.put(WorldStateKey.COMBAT_IS_IN_COMBAT, false); // Anticipate combat ends
+        actions.add(new ActionAttackNPC("Giant rat", combatArea, killRatMeleeEffects));
+
+        // Action for attacking Rat with Ranged (S4)
+        Map<WorldStateKey, Object> killRatRangedEffects = new HashMap<>();
+        killRatRangedEffects.put(WorldStateKey.S4_KILLED_RAT_RANGED, true);
+        killRatRangedEffects.put(WorldStateKey.COMBAT_IS_IN_COMBAT, false);
+        actions.add(new ActionAttackNPC("Giant rat", combatArea, killRatRangedEffects));
+
+        // Action for Casting Wind Strike on Chicken (S7)
+        Area magicArea = TUTORIAL_AREAS.get("Magic_Area"); // Use correct name
+        Map<WorldStateKey, Object> killChickenEffects = new HashMap<>();
+        killChickenEffects.put(WorldStateKey.S7_KILLED_CHICKEN, true);
+        killChickenEffects.put(WorldStateKey.COMBAT_IS_IN_COMBAT, false);
+        // Add rune consumption effects if desired for planner
+        // killChickenEffects.put(WorldStateKey.S7_HAS_AIR_RUNE, false); // Example
+        // killChickenEffects.put(WorldStateKey.S7_HAS_MIND_RUNE, false); // Example
+
+        actions.add(new ActionCastSpellOnNPC(
+                Normal.WIND_STRIKE, // The spell enum
+                "Chicken",          // Target NPC name
+                magicArea,
+                killChickenEffects
+        ));
+        // --- TODO: Add Actions for Sections 4, 5, 6, 7, 8 ---
+        // Examples:
+        // ActionOpenTab(Tab.EQUIPMENT, ...)
+        // ActionClickWidget(...) // For equip stats button
+        // ActionEquipItem(...) // Need a dedicated action for equipping
+        // ActionClickObject(...) // For rat gate
+        // ActionAttackNPC(...) // Need a dedicated action for combat
+        // ActionWalkToTile(...)
+        // ActionClickObject("Bank booth", ...)
+        // ActionClickObject("Poll booth", ...)
+        // ActionOpenDoor(...) // Financial advisor doors
+        // ActionTalkToNPC("Financial Advisor", ...)
+        // ActionOpenTab(Tab.PRAYER, ...)
+        // ActionTalkToNPC("Brother Brace", ...)
+        // ActionOpenTab(Tab.FRIENDS, ...)
+        // ActionOpenDoor(...) // Church door
+        // ActionTalkToNPC("Magic Instructor", ...)
+        // ActionOpenTab(Tab.MAGIC, ...)
+        // ActionCastSpellOnNPC(...) // Need dedicated action
+        // ActionTalkToNPC(...) // Final dialogue
+
+        Logger.log("Loaded " + actions.size() + " available actions.");
         return actions;
     }
 

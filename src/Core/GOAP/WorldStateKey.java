@@ -62,6 +62,8 @@ public enum WorldStateKey {
     S4_KILLED_RAT_MELEE,    // Boolean (Hard to observe directly, rely on stage ID)
     S4_HAS_BOW,             // Boolean
     S4_HAS_ARROWS,          // Boolean
+    S4_BOW_EQUIPPED,
+    S4_ARROWS_EQUIPPED,
     S4_KILLED_RAT_RANGED,   // Boolean (Hard to observe directly, rely on stage ID)
     S4_COMBAT_TASKS_DONE,   // Boolean
     S4_RAT_GATE_OPEN,
